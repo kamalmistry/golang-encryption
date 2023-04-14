@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"strings"
 
@@ -9,12 +10,13 @@ import (
 	"github.com/ProtonMail/gopenpgp/v2/helper"
 )
 
-func encryptDecryptWithPassword() {
-	const password = "hunter2"
+// Encrypt message only using password
+func encryptDecryptWithPasswordOnly(password string) {
+	// const password = "hunter2"
 	passwordBytes := []byte(password)
 	// const password = []byte("hunter2")
 	// Encrypt data with password
-	armor, err := helper.EncryptMessageWithPassword(passwordBytes, "my message")
+	armor, err := helper.EncryptMessageWithPassword(passwordBytes, "my secret message..")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -28,6 +30,9 @@ func encryptDecryptWithPassword() {
 	fmt.Println("message: ", message)
 }
 
+// Generate RSA private and public keys using the passphrase
+// It also generate keys files in current directory with names:
+// "private_key.asc" and "public_key.asc"
 func generateKeys(password string) (string, string) {
 	// func generateKeys() {
 	//const password = "LongSecret"
@@ -40,12 +45,23 @@ func generateKeys(password string) (string, string) {
 		rsaBits = 2048
 	)
 
+	// Key files path
+	privateKeyFilePath := ".\\private_key.asc"
+	publicKeyFilePath := ".\\public_key.asc"
+
 	// RSA, string
 	privateKey, err := helper.GenerateKey(name, email, passphrase, "rsa", rsaBits)
 	if err != nil {
 		log.Fatal(err)
 	}
 	// fmt.Println("privateKey string: ", privateKey)
+
+	fmt.Println("Writing private key to file: ", privateKeyFilePath)
+	err = ioutil.WriteFile(privateKeyFilePath, []byte(privateKey), 0644)
+	if err != nil {
+		fmt.Println("Error writing private key to file:", err)
+		panic(err)
+	}
 
 	keyRing, err := crypto.NewKeyFromArmoredReader(strings.NewReader(privateKey))
 	if err != nil {
@@ -57,18 +73,73 @@ func generateKeys(password string) (string, string) {
 	}
 	// fmt.Println("publicKey string: ", publicKey)
 
+	fmt.Println("Writing public key to file: ", publicKeyFilePath)
+	err = ioutil.WriteFile(publicKeyFilePath, []byte(publicKey), 0644)
+	if err != nil {
+		fmt.Println("Error writing public key to file:", err)
+		panic(err)
+	}
+
 	return privateKey, publicKey
 }
 
 func main() {
 	const password = "SomeLongSecret"
+
+	// encryptDecryptWithPasswordOnly(password)
+
 	passphrase := []byte(password)
 	prikey, pubkey := generateKeys(password)
 
+	fmt.Println("priKey: \n", prikey)
+	fmt.Println("pubkey: \n", pubkey)
+
+	// encryptDecryptUsingKeyStrings(pubkey, prikey, passphrase)
+
+	publicKeyFilePath := ".\\public_key.asc"
+	privateKeyFilePath := ".\\private_key.asc"
+	encryptDecryptUsingKeyFiles(publicKeyFilePath, privateKeyFilePath, passphrase)
+}
+
+func encryptDecryptUsingKeyFiles(publicKeyFilePath string, privateKeyFilePath string, passphrase []byte) {
+
+	// Load the public key from a file
+	fmt.Println("Loading the public key from a file ..")
+	pubkey, err := ioutil.ReadFile(publicKeyFilePath)
+	if err != nil {
+		log.Fatal(err)
+		panic(err)
+	}
+
+	// Load the private key from a file
+	fmt.Println("Loading the private key from a file ..")
+	prikey, err := ioutil.ReadFile(privateKeyFilePath)
+	if err != nil {
+		log.Fatal(err)
+		panic(err)
+	}
+
+	message := "this is pretty innocent plain text message !!"
+	fmt.Println("Original message: ", message)
+
+	// encrypt plain text message using public key
+	armor, err := helper.EncryptMessageArmored(string(pubkey), message)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("encrypted message: \n", armor)
+
+	// decrypt armored encrypted message using the private key and obtain plain text
+	decrypted, err := helper.DecryptMessageArmored(string(prikey), passphrase, armor)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("decrypted message: \n", decrypted)
+}
+
+func encryptDecryptUsingKeyStrings(pubkey string, prikey string, passphrase []byte) {
 	message := "this is pretty innocent plain text!!"
 	fmt.Println("Original message: ", message)
-	// fmt.Println("priKey", prikey)
-	// fmt.Println("pubkey", pubkey)
 
 	// encrypt plain text message using public key
 	armor, err := helper.EncryptMessageArmored(pubkey, message)
