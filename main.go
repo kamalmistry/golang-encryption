@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/ProtonMail/gopenpgp/v2/crypto"
@@ -96,9 +98,11 @@ func main() {
 
 	// encryptDecryptUsingKeyStrings(pubkey, prikey, passphrase)
 
-	publicKeyFilePath := ".\\public_key.asc"
-	privateKeyFilePath := ".\\private_key.asc"
-	encryptDecryptUsingKeyFiles(publicKeyFilePath, privateKeyFilePath, passphrase)
+	encryptDecryptFileUsingKeyStrings(pubkey, prikey, passphrase, ".\\originalData.csv")
+
+	// publicKeyFilePath := ".\\public_key.asc"
+	// privateKeyFilePath := ".\\private_key.asc"
+	// encryptDecryptUsingKeyFiles(publicKeyFilePath, privateKeyFilePath, passphrase)
 }
 
 func encryptDecryptUsingKeyFiles(publicKeyFilePath string, privateKeyFilePath string, passphrase []byte) {
@@ -154,4 +158,53 @@ func encryptDecryptUsingKeyStrings(pubkey string, prikey string, passphrase []by
 		log.Fatal(err)
 	}
 	fmt.Println("decrypted text: \n", decrypted)
+}
+
+func encryptDecryptFileUsingKeyStrings(pubkey string, prikey string, passphrase []byte, csvFilePath string) {
+
+	fileData := getFileDataAsString(csvFilePath)
+	fmt.Println("Original file data: ", fileData)
+
+	// encrypt file data message using public key
+	armor, err := helper.EncryptMessageArmored(pubkey, fileData)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("encrypted text: \n", armor)
+
+	// write the encrypted text into the file.
+	localEncryptedFilePath := ".\\encryptedFile.csv"
+	fmt.Println("Writing encrypted data to a file: ", localEncryptedFilePath)
+	err = os.WriteFile(localEncryptedFilePath, []byte(armor), 0644)
+	if err != nil {
+		fmt.Println("Error writing encrypted data to file:", err)
+		panic(err)
+	}
+
+	// Read the data from an encrypted file
+	fmt.Println("Loading the encrypted data from a file ..")
+	encData := getFileDataAsString(localEncryptedFilePath)
+
+	decrypted, err := helper.DecryptMessageArmored(prikey, passphrase, encData)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("decrypted csv data: ")
+	fmt.Println(decrypted)
+}
+
+func getIoReaderFromString(data string) io.Reader {
+	return strings.NewReader(data)
+}
+
+func getFileDataAsString(filePath string) string {
+	// Read the whole file
+	b, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Println(err)
+		panic(err)
+	}
+
+	// Convert the bytes to a string and returns
+	return string(b)
 }
